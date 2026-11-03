@@ -1,0 +1,19 @@
+* text=auto eol=lf
+
+# Preserve every byte of the imported archives, including original CRLF text.
+/ST_src/** -text
+/SnoopyTennis_v2-1/** -text
+/ST_src/*.BAS linguist-language=QuickBASIC
+"SnoopyTennis_v2-1/ST loader source/*.bas" linguist-language=vb6
+
+*.png binary
+*.bmp binary
+*.BMP binary
+*.gif binary
+*.jpg binary
+*.wav binary
+*.mid binary
+*.f16 binary
+/html5/assets/*-data.js linguist-generated=true
+/html5/dist/** linguist-generated=true
+/SnoopyTennis.html linguist-generated=true

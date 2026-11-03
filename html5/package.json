@@ -1,0 +1,12 @@
+{
+  "name": "snoopy-tennis-original",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A dependency-free HTML5 port of the Ex-D QBasic Snoopy Tennis game.",
+  "scripts": {
+    "start": "node tools/serve.cjs",
+    "build": "node tools/package.cjs",
+    "test": "node --test tests/*.test.cjs",
+    "check": "node --check engine.js && node --check graphics.js && node --check audio.js && node --check sample-bank.js && node --check menu.js && node --check app.js"
+  }
+}

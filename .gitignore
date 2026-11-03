@@ -1,0 +1,13 @@
+# Local Windows GS samples and recordings; excluded from the public repository.
+html5/assets/windows-midi-data.js
+html5/Windows-GS-preview.wav
+SnoopyTennis-Windows-local.html
+html5/.local/
+
+node_modules/
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db
+.env
+.env.*

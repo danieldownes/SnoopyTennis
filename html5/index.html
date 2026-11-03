@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f5f3eb">
+  <meta name="description" content="Snoopy Tennis, the original Ex-D QBasic game, brought to your browser with its original pixel art.">
+  <title>Snoopy Tennis · Original edition</title>
+  <link rel="icon" type="image/png" href="assets/snoopy-hit.png">
+  <link rel="stylesheet" href="styles.css">
+  <script defer src="assets/music-data.js"></script>
+  <script defer src="assets/menu-data.js"></script>
+  <script defer src="assets/gm-midi-data.js"></script>
+  <script defer src="engine.js"></script>
+  <script defer src="graphics.js"></script>
+  <script defer src="audio.js"></script>
+  <script defer src="sample-bank.js"></script>
+  <script defer src="menu.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <div class="site-wrap">
+    <header class="site-header">
+      <a class="brand" href="" aria-label="Snoopy Tennis home"><span class="brand-mark"><img src="assets/snoopy-hit.png" alt="" width="59" height="47"></span><span>Snoopy <strong>Tennis</strong><small>AN EX-D SOFTWARE CLASSIC</small></span></a>
+      <div class="edition"><span class="tiny-ball"></span> FROM QBASIC, WITH LOVE <span class="edition-year">2000–02 / HTML5</span></div>
+    </header>
+
+    <main>
+      <section class="game-heading" aria-labelledby="page-title">
+        <div><div class="eyebrow">THE ORIGINAL, BACK IN PLAY</div><h1 id="page-title">Back up the tree<span>.</span></h1><p>Same Snoopy. Same pixels. One more rally.</p></div>
+        <div class="graphics-picker" role="group" aria-label="Graphics edition">
+          <span class="picker-label">GRAPHICS</span>
+          <div class="segmented"><button type="button" class="selected" aria-pressed="true"><span class="pixel-square"></span> Original</button><button type="button" disabled title="HD graphics are planned for a later version">HD <span class="soon">SOON</span></button></div>
+        </div>
+      </section>
+
+      <section class="arcade" id="arcade" aria-label="Snoopy Tennis game">
+        <div class="scorebar" id="scorebar" hidden>
+          <div class="score-item"><span class="score-label">SCORE</span><strong id="score">0000</strong></div>
+          <div class="score-item best-score"><span class="score-label">PERSONAL BEST</span><strong id="best">0000</strong></div>
+          <div class="lives-item"><span class="score-label">LIVES</span><div id="lives" aria-label="3 lives remaining"><span class="life"></span><span class="life"></span><span class="life"></span></div></div>
+          <div class="status" id="status"><span></span><b id="status-text">READY</b></div>
+        </div>
+
+        <div class="playfield" id="playfield" data-screen="menu">
+          <canvas id="original-menu" width="640" height="480" tabindex="0" aria-label="Original Snoopy Tennis menu. Up and Down to choose. Enter to select.">Original Snoopy Tennis menu: Start Game, About/Help, Exit.</canvas>
+          <div class="original-menu-actions" id="menu-actions" role="group" aria-label="Original menu">
+            <button type="button" data-menu="0" disabled><span class="sr-only">Start Game</span></button>
+            <button type="button" data-menu="1" disabled><span class="sr-only">About/Help</span></button>
+            <button type="button" data-menu="2" disabled><span class="sr-only">Exit</span></button>
+          </div>
+          <div class="sr-only" id="original-transcript" hidden><h2>Original About/Help text</h2><pre id="original-about-text"></pre></div>
+          <canvas id="game" width="320" height="200" tabindex="0" hidden aria-label="Snoopy Tennis. Move with Up and Down, or P and L. Space to swing. Escape to pause. Q to end the game.">Your browser needs HTML5 canvas to play Snoopy Tennis.</canvas>
+          <div class="screen-overlay" id="overlay" hidden>
+            <div class="start-panel" id="start-panel">
+              <img class="original-title" src="assets/title.png" alt="Original Snoopy Tennis v2.1 title" width="640" height="94">
+              <div class="panel-content"><span class="panel-kicker" id="panel-kicker">ORIGINAL EDITION</span><h2 id="panel-title">Good day for a rally.</h2><p id="panel-description">Climb the tree. Time your swing.<br>Keep Charlie Brown’s tennis balls in play.</p><button type="button" class="primary-button" id="start" disabled>Loading artwork…</button><span class="start-hint" id="start-hint">or press Enter to start</span></div>
+            </div>
+          </div>
+          <div class="point-flash" id="point-flash" aria-hidden="true"></div>
+        </div>
+
+        <div class="game-toolbar">
+          <span class="resolution" id="resolution"><span class="live-dot"></span> ORIGINAL 640 × 480 <span class="toolbar-divider">/</span> MAIN MENU</span>
+          <div class="toolbar-actions">
+            <button type="button" class="tool-button" id="music" aria-pressed="true" title="Original MIDI tune · GeneralUser GS piano, bass and drums">♫ <span>Music on</span></button>
+            <button type="button" class="tool-button" id="sound" aria-pressed="true" title="Mute or unmute all audio">◖)) <span>Sound on</span></button>
+            <button type="button" class="tool-button" id="menu-back" hidden title="Return to the original menu">↩ <span>Menu</span></button>
+            <button type="button" class="tool-button" id="pause" disabled title="Pause or resume (Esc)">Ⅱ <span>Pause</span></button>
+            <button type="button" class="tool-button fullscreen" id="fullscreen" title="Toggle full screen" aria-label="Toggle full screen">⛶</button>
+          </div>
+        </div>
+        <div class="touch-controls" aria-label="Game controls">
+          <div><button type="button" class="touch-button" data-action="up" aria-label="Move up one branch">↑ <span>UP</span></button><button type="button" class="touch-button" data-action="down" aria-label="Move down one branch">↓ <span>DOWN</span></button></div>
+          <button type="button" class="touch-button swing-button" data-action="hit">SWING <span>●</span></button>
+        </div>
+      </section>
+
+      <section class="below-game" aria-label="How to play">
+        <div class="controls-guide"><span class="small-heading">MAKE YOUR MOVE</span><span><kbd>↑</kbd><kbd>↓</kbd> climb <span class="alt-keys">or P / L</span></span><span><kbd class="space-key">SPACE</kbd> swing</span><span><kbd>ESC</kbd> pause</span></div>
+        <p class="game-tip"><span>↳</span> Watch Lucy. Her returns are faster, and worth <strong>3 points.</strong></p>
+      </section>
+
+      <div class="details-row"><p>Five branches. Three lives. How long can you keep up?</p><button type="button" class="text-button" id="help-open">How to play &amp; credits <span>↗</span></button></div>
+      <p class="sr-only" role="status" id="announcement" aria-live="polite"></p>
+      <noscript><p class="noscript">Please enable JavaScript to play the HTML5 version.</p></noscript>
+    </main>
+
+    <footer><span>SNOOPY TENNIS <span class="footer-dot">·</span> THE ORIGINAL COLLECTION</span><span>Original game by Daniel Downes <span class="footer-dot">/</span> Ex-D Software Development</span></footer>
+  </div>
+
+  <dialog id="help" aria-labelledby="help-title">
+    <button type="button" class="dialog-close" id="help-close" aria-label="Close help">×</button>
+    <div class="eyebrow">A QUICK WARM-UP</div><h2 id="help-title">Meet you at the tree.</h2>
+    <p>You’re Snoopy. Move between five branches to meet the incoming balls, then time your swing as they reach your racket. Each return earns <strong>2 points</strong>.</p>
+    <p>Lucy sometimes sends a ball back faster. Return those for <strong>3 points</strong>. Miss three balls and the game is over. The serves get busier the longer you play.</p>
+    <dl class="help-controls"><dt>Climb up / down</dt><dd>↑ / ↓ or P / L</dd><dt>Swing</dt><dd>Space</dd><dt>Pause / resume</dt><dd>Esc</dd><dt>End current game</dt><dd>Q</dd><dt>Start / play again</dt><dd>Enter</dd></dl>
+    <p class="touch-help">On a phone or tablet, use the Up, Down, and Swing buttons below the game.</p>
+    <div class="credits"><h3>From the original credits</h3><p>Game, menu, background and character modifications: <strong>Daniel Downes</strong> (formerly Daniel Vincent). Original DOS graphics engine: <strong>Andrew Ayers</strong>, “Blast”. MIDI driver: <strong>Jesse Dorland</strong>, “Qmidi”. MIDI sequence: <strong>D. W. Barnes</strong>. Gravity formula: <strong>Andrew Bellchambers</strong>.</p><p>Original game © 2000–02 Ex-D Software Development. Peanuts characters belong to their respective rights holders. Original game design credited to Nintendo’s 1982 Game &amp; Watch Snoopy Tennis.</p><p id="audio-credit">Music uses GeneralUser GS by S. Christian Collins, with sampled piano, fretless bass and drums. The original MIDI score is unchanged. HD graphics are reserved for a future edition.</p></div>
+  </dialog>
+</body>
+</html>

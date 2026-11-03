@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>General MIDI audio check</title>
+<style>body{font:16px system-ui;max-width:700px;padding:40px;margin:auto;background:#f5f3eb;color:#253e33}button{padding:12px 18px;margin:10px 0}audio{display:block;width:100%}output{display:block;white-space:pre-wrap;margin:20px 0}</style>
+<h1>General MIDI sound check</h1>
+<p>Render the first 12 seconds of the original score using the same sampler and effects as the game.</p>
+<button id="render" type="button">Render preview</button>
+<output id="result">Ready</output><audio id="player" controls></audio>
+<a id="download" download="SnoopyTennis-GM-preview.wav" hidden>Download preview</a>
+<script src="../assets/music-data.js"></script><script src="../assets/gm-midi-data.js"></script>
+<script src="../sample-bank.js"></script><script src="../audio.js"></script>
+<script>
+document.getElementById('render').onclick = async () => {
+  const button=document.getElementById('render'), result=document.getElementById('result');
+  button.disabled=true; result.textContent='Rendering…';
+  try {
+    const rate=44100, seconds=12, context=new OfflineAudioContext(2,rate*seconds,rate);
+    const engine=new SnoopyAudio.AudioEngine();
+    engine.context=context;engine.master=context.createGain();engine.master.gain.value=.5;
+    engine.master.connect(context.destination);
+    engine.sampleBank=new SnoopySamples.SampleBank(context,SNOOPY_MIDI_BANK);engine.createEffects();
+    const song=SnoopyAudio.parseMidi(Uint8Array.from(atob(SNOOPY_MIDI),c=>c.charCodeAt(0)));
+    for(const note of song.notes) if(note.time<seconds)engine.playNote(note,note.time);
+    const buffer=await context.startRendering();
+    let peak=0,squares=0;
+    for(let ch=0;ch<2;ch++)for(const value of buffer.getChannelData(ch)){
+      if(!Number.isFinite(value))throw Error('Non-finite PCM output');
+      peak=Math.max(peak,Math.abs(value));squares+=value*value;
+    }
+    const rms=Math.sqrt(squares/(buffer.length*2));
+    if(peak<=.001||peak>=1||rms<=.0001)throw Error('Unexpected signal level: '+peak);
+    const pcm=new ArrayBuffer(44+buffer.length*4), view=new DataView(pcm);
+    const text=(offset,str)=>{for(let i=0;i<str.length;i++)view.setUint8(offset+i,str.charCodeAt(i));};
+    text(0,'RIFF');view.setUint32(4,pcm.byteLength-8,true);text(8,'WAVE');text(12,'fmt ');
+    view.setUint32(16,16,true);view.setUint16(20,1,true);view.setUint16(22,2,true);
+    view.setUint32(24,rate,true);view.setUint32(28,rate*4,true);view.setUint16(32,4,true);view.setUint16(34,16,true);
+    text(36,'data');view.setUint32(40,buffer.length*4,true);
+    for(let i=0;i<buffer.length;i++)for(let ch=0;ch<2;ch++)
+      view.setInt16(44+(i*2+ch)*2,Math.round(Math.max(-1,Math.min(1,buffer.getChannelData(ch)[i]))*32767),true);
+    const url=URL.createObjectURL(new Blob([pcm],{type:'audio/wav'}));
+    document.getElementById('player').src=url;
+    const download=document.getElementById('download');download.href=url;download.hidden=false;
+    result.dataset.state='pass';result.textContent='PASS · 12 seconds · peak '+peak.toFixed(4)+' · RMS '+rms.toFixed(4)+'\nPiano, fretless bass and drums use '+SNOOPY_MIDI_BANK.name+'.';
+  }catch(error){result.dataset.state='fail';result.textContent='FAIL: '+error.message;console.error(error);}
+  button.disabled=false;
+};
+</script></html>
