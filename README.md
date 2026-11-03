@@ -53,9 +53,15 @@ Original graphics are implemented. HD remains a future renderer.
 
 ## Inside the QBasic code
 
-The excerpts below come from the preserved source. The `qbasic` fences use
-GitHub's QuickBASIC syntax highlighting. Some examples omit unrelated lines;
-their links lead to the full routines.
+This tour focuses on the game-specific logic and presentation in the preserved
+source. The `qbasic` fences use GitHub's QuickBASIC syntax highlighting. Some
+examples omit unrelated lines; their links lead to the full routines.
+
+The file also contains borrowed library code: **Jesse Dorland's Qmidi** provides
+background MIDI playback and its elapsed-time helper, and **Andrew Ayers's Blast**
+provides the assembly graphics routines. Those systems are credited to their
+respective authors; the examples below focus on the game, menu and screen effects.
+The MIDI integration is described separately in the [MIDI investigation](html5/MIDI-REVIEW.md).
 
 ### Timing a frame with `TIMER` and a label
 
@@ -74,100 +80,153 @@ input handling happen outside it. The actual frame period includes that work,
 so it is not a guaranteed 90 ms fixed timestep. The HTML5 port keeps the intended
 pace with a fixed simulation tick and a separate browser rendering loop.
 
-### Background MIDI playback and a clock that crosses midnight
+### Reusing inactive ball slots
 
-[Starting the music](ST_src/STennis.BAS#L131-L141):
+[Ball records and serving](ST_src/STennis.BAS#L267-L295):
 
 ```qbasic
-DIM MIDI%(16000)
-LoadAndPlayMIDI "peanuts.mid", VARSEG(MIDI%(0)), VARPTR(MIDI%(0))
+TYPE ballt
+ x AS INTEGER
+ y AS INTEGER
+ balltype AS INTEGER
+ n AS INTEGER
+END TYPE
+DIM SHARED ball(40) AS ballt
 ```
 
-The array reserves storage for the file. `VARSEG` and `VARPTR` pass a real-mode
-segment and offset into the Qmidi routines. The musical events are scheduled by
-Creative's resident MIDI driver; the game does not need to play each note in
-its drawing loop.
-
-[Calling the driver and starting the elapsed-time clock](ST_src/STennis.BAS#L1453-L1459):
+Each ball carries its own position, path type and age. Before growing the used
+part of the array, the serve routine looks for an inactive slot (`balltype = 0`):
 
 ```qbasic
-DEF SEG = VARSEG(asm$)
-Offset% = SADD(asm$)
-CALL ABSOLUTE(MIDISegment%, MIDIOffset%, Offset%)
-'Start the MIDI timer.
-MIDI.PLAYTIME = TIMER
-MIDI.ERROR = 0
+IF balls = 0 THEN GOTO noballs
+FOR ah = 1 TO balls
+IF ball(ah).balltype = 0 THEN ball(ah).balltype = INT(RND * 5) + 1: ball(ah).n = 0: ball(ah).x = 10: ball(ah).y = 160: GOTO startdo
+NEXT ah
+
+noballs:
+balls = balls + 1
+ball(balls).balltype = INT(RND * 5) + 1
+ball(balls).x = 10
+ball(balls).y = 160
+ball(balls).n = 0
 ```
 
-The embedded machine-code string calls interrupt `80h`, using functions 4 and 5
-to hand over the in-memory MIDI and start playback. The `MIDI.PLAYTIME` assignment
-records when playback started; it does not drive the notes themselves.
+An incoming ball is reset to x=10, y=160, age zero, with one of five random path
+types. `balls` tracks the allocated slot range; `bio` separately tracks balls
+still in play. This makes reuse possible without shifting the remaining balls
+around in the fixed-size array. The original has no explicit capacity guard;
+the browser port adds one.
 
-[The complete elapsed-time function](ST_src/STennis.BAS#L1477-L1493):
+### Varying the pressure using elapsed ticks and balls in play
+
+[Serve scheduling](ST_src/STennis.BAS#L297-L313):
 
 ```qbasic
-FUNCTION TimeMIDI!
-'If a MIDI file is playing, carry out the timing routine
-IF MIDI.PLAYTIME THEN
-'Get the current time
-CurrentTime! = TIMER
-'If midnight has come since the MIDI file started playing, change
-'CurrentTime! accordingly
-IF CurrentTime! - MIDI.PLAYTIME < 0 THEN
-CurrentTime! = 86400 + CurrentTime!
+n = n + 1
+IF cwing = 0 AND tyi = 0 AND lastn < n THEN
+    lastn = n + 30
+    SELECT CASE n
+        CASE IS > 1200
+        IF bio <= 5 THEN GOTO serve
+        IF INT(RND * 1000) + 1 < 70 THEN tyi = 1: GOTO serve
+        CASE 900 TO 1199
+        IF INT(RND * 1000) + 1 < 100 THEN tyi = 1: GOTO serve
+        CASE 600 TO 899
+        IF bio <= 2 THEN GOTO serve
+        IF INT(RND * 1000) + 1 < 50 THEN tyi = 1: GOTO serve
+        CASE 200 TO 599
+        IF bio <= 1 THEN GOTO serve
+        IF INT(RND * 1000) + 1 < 20 THEN tyi = 1: GOTO serve
+    END SELECT
 END IF
-'Get the final result
-TimeMIDI! = CurrentTime! - MIDI.PLAYTIME
-MIDI.ERROR = 0
-ELSE
-MIDI.ERROR = 3
+```
+
+Difficulty follows the global tick count `n`, rather than the score. A serve
+check is gated by Charlie Brown's animation (`cwing`) and a deadline (`lastn`).
+Some time bands force a serve if the active-ball count is low, while others add
+random serves. The changing thresholds, population checks and cooldown work
+together; it is more than a single speed value being increased every level.
+The random tests run when this gate is eligible, not on every displayed frame.
+
+### A three-state swing with a recovery period
+
+[Swing animation](ST_src/STennis.BAS#L332-L335):
+
+```qbasic
+IF swing = 1 THEN swingtime = swingtime + 1
+IF swing = 2 THEN swingtime1 = swingtime1 + 1
+IF swingtime > 3 THEN swing = 2: swingtime = 0
+IF swingtime1 > 2 THEN swing = 0: swingtime1 = 0
+```
+
+`swing = 0` means idle, `1` is the active hitting pose, and `2` is the
+follow-through. Separate counters advance the two animated phases. The Space
+handler starts a swing only while idle:
+
+```qbasic
+    CASE " "
+    IF swing <> 0 THEN GOTO getout
+    swing = 1
+```
+
+A key press cannot continually restart the hitting pose. That gives the racket
+an active window and a recovery period, using just three states and two tick
+counters. The hit test below accepts only state 1.
+
+### Encoding the rally state in the ball's path number
+
+[Normal return and score](ST_src/STennis.BAS#L407-L415):
+
+```qbasic
+IF ball(nn).x > 225 AND ball(nn).x < 249 AND ball(nn).balltype <= 5 AND ball(nn).balltype = stage AND swing = 1 THEN
+    ball(nn).balltype = ball(nn).balltype + 10
+    ball(nn).n = 0
+    
+    score = score + 2
+
+    IF n < 300 AND cwing = 0 THEN tyi = 1: GOTO serve
+    IF n > 301 AND n < 600 AND cwing = 0 THEN IF INT(RND * 100) + 1 < 50 THEN GOTO serve
 END IF
-END FUNCTION
 ```
 
-Adding 86,400 seconds handles one midnight rollover. This protection is present
-in the MIDI elapsed-time helper, while the short game-loop wait above has no
-equivalent check. The helper is supplied by Qmidi; the main game starts the music
-but does not use `TimeMIDI!` to synchronize ball movement.
-
-**About recording:** the supplied code has background MIDI playback and playback
-time measurement, but no gameplay recording/replay system or audio-recording
-routine. The unused [`InputSource` routine](ST_src/STennis.BAS#L1004-L1011) reads
-or selects a Sound Blaster mixer input; it does not capture or store audio. The
-note sequence is already recorded in `peanuts.mid`. There is no replay timing
-format to reconstruct from these source files.
-
-### BASIC as a host for tiny assembly routines
-
-[Blast initialization](ST_src/STennis.BAS#L877-L895), excerpt:
+[Lucy's faster return](ST_src/STennis.BAS#L417-L424), with an unused commented
+serve rule omitted:
 
 ```qbasic
-' BlastCopy! (BLSTCOPY.ASM)
-code$ = "1E5589E58B460E8ED88B760C8B460A8EC08B7E08B9007DF3A55D1FCA0800"
-DEF SEG = VARSEG(code1%(0))
-FOR I% = 0 TO 29
-  d% = VAL("&h" + MID$(code$, I% * 2 + 1, 2))
-  POKE VARPTR(code1%(0)) + I%, d%
-NEXT I%
-DEF SEG
+IF ball(nn).x > 225 AND ball(nn).x < 249 AND ball(nn).balltype > 20 AND ball(nn).balltype = stage + 20 AND swing = 1 THEN
+    ball(nn).balltype = ball(nn).balltype - 10
+    ball(nn).n = 0
+   
+    score = score + 3
+END IF
 ```
 
-Andrew Ayers's Blast engine packs machine code into hexadecimal strings. BASIC
-decodes those strings into reserved arrays with `POKE`; wrappers later execute
-the bytes with `CALL ABSOLUTE`. This brings fast blitting into a program whose
-game logic and menu are still ordinary BASIC.
+The type number does two jobs: 1–5 identifies incoming serve paths, 11–15 is
+Snoopy's outgoing return, and 21–25 is a faster ball sent back by Lucy. Adding or
+subtracting ten switches the path family while retaining the corresponding tree
+position. Normal returns earn two points; the faster return earns three.
 
-The game also reserves two 64,000-byte buffers as arrays of 16-bit integers:
+The hit test combines a strict x window (225 < x < 249), the selected stage and
+the active swing pose. Snoopy moves between just five y positions—155, 110, 80,
+40 and 5—so matching a path number to a stage avoids a general collision engine.
+
+### Lucy's return changes the route without creating another ball
+
+[Lucy interception](ST_src/STennis.BAS#L445-L449):
 
 ```qbasic
-REDIM buffer1%(31999) ' This is an off-screen buffer
-REDIM buffer2%(31999) ' This is another...
+'Return from Lucy?
+ IF ball(nn).x < 54 AND ball(nn).balltype > 10 AND lret = 1 THEN
+  ball(nn).balltype = ball(nn).balltype + 10
+  lret = 0
+ END IF
 ```
 
-It copies the saved background to the working buffer, draws the actors there,
-then presents the result at VGA memory segment `&HA000`. The presentation call
-starts at `buffer1%(2)`, skipping the four-byte image header used by BASIC's
-graphics array format. See [the main drawing loop](ST_src/STennis.BAS#L320-L472).
+`lret` arms one interception. When an outgoing ball reaches Lucy's side, the
+same record changes to its fast-return path and the flag clears. The code does
+not reset the ball's age `n` here, unlike Snoopy's hit. The new movement formula
+therefore picks up that existing age: a small detail that changes the feel of
+Lucy's return and is retained in the port.
 
 ### Fading a whole screen by editing its palette
 
@@ -261,7 +320,8 @@ ball(nn).y = ball(nn).y - 4 + ((ball(nn).n * ball(nn).n) / 500)
 the squared term is added to the *per-frame displacement*, rather than defining
 the ball's absolute height. Changing the divisor creates different routes to
 the tree. The original stores the coordinates as `INTEGER`, so rounding is part
-of the movement.
+of the movement. The original credits name Andrew Bellchambers for the
+gravity-formula contribution.
 
 A return then requires the ball to enter a narrow x window, its path type to
 match Snoopy's selected stage, and the swing to be in its active pose. The game
@@ -269,23 +329,28 @@ does not need a general collision engine to make its five-position design work.
 
 ## Reconstructed archive history
 
-The first **54 commits import one archived file each**. Both the author date and
-committer date match that file's preserved last-modified time, expressed in UTC.
-The following current-date commit adds the browser restoration and documentation.
+The first **54 commits import one archived file each**. Most use the preserved
+last-modified time for both the author and committer dates. Four bundled Creative
+support files—`Sbsim.com`, `Sbsim.cfg`, `Sbmidi.exe` and `CTMIDI.DRV`—instead use
+**3 November 2026**, the actual archive-import date. Their 1979, 1980, 1993 and
+1994 file timestamps describe support-file metadata, not this game's development.
+Subsequent current-date commits add the browser restoration and documentation.
 
 These are reconstructed **import commits**, not recovered development commits.
 Only one surviving snapshot of each file was supplied. Original timestamps can
-be misleading: the bundled SBSIM support files carry 1979/1980 dates, while some
-packaging files carry 2014 dates. Those values are retained as metadata, not
-presented as dates when Snoopy Tennis was written.
+be misleading: the old support-file dates remain recorded only as original
+metadata, while their Git import dates use the archive-import date. Some later
+packaging files carry 2014 dates. None of these values is presented as a date
+when the game itself was written.
 
 The first-party artwork and audio include 1999 dates. The surviving `MENU.BAS`
 is dated **29 January 2000**, and `STennis.BAS` **30 June 2000**, using UTC dates.
 They have not been artificially changed to 1999.
 
 [`archive/file-dates.csv`](archive/file-dates.csv) records every path, size,
-timestamp, SHA-256 and import commit. Git checkouts do not normally restore
-filesystem modification times; the history and manifest retain those dates.
+original timestamp, chosen Git timestamp, date policy, SHA-256 and import commit.
+Git checkouts do not normally restore filesystem modification times; the manifest
+retains the original values separately from the corrected import dates.
 
 To verify the archive against the committed history:
 
